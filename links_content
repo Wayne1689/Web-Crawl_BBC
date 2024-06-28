@@ -1,0 +1,61 @@
+import requests
+from bs4 import BeautifulSoup
+import re
+import os  # 用來實現跟操作系統，可以創建資料夾
+from urllib.parse import urljoin
+
+def get_links_from_page(url):
+    try:
+        web = requests.get(url)
+        web.encoding = 'utf-8'
+        soup = BeautifulSoup(web.text, 'html.parser')
+        links = []
+        # 找出所有<a>的標籤
+        for link in soup.find_all('a', href=True, attrs={'data-testid': ['external-anchor', 'internal-link']}):
+            href = link['href']  # link 是已取得的element,透過['href']可以得到element中的href屬性
+            if not re.match(r'http', href):  # 若不是'http'開頭代表，須將轉化為絕對路徑
+                href = urljoin(url, href)
+            links.append(href)
+        return links
+    except requests.RequestException as e:
+        print(f'Failed to retrieve {url}: {e}')
+        return []
+
+def crawl_links(links):
+    file_counter = 1
+
+    for link in links:
+        try:
+            response = requests.get(link)
+            response.encoding = 'utf-8'
+            soup = BeautifulSoup(response.text, 'html.parser')
+            elements = soup.find_all('p')
+            text_list = [element.get_text() for element in elements]
+
+            # 文件夾路徑
+            folder_path = r'your_path'
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
+
+            filename = f'article_{file_counter}.txt'
+            file_path = os.path.join(folder_path, filename)
+
+            #不會覆蓋掉原來的數據，使用'a' mode 
+            with open(file_path, 'a', encoding='utf-8') as file:
+                for line in text_list:
+                    file.write(line + '\n')
+
+            print(f'Data from {link} saved to {file_path}')
+
+            file_counter += 1
+
+        except requests.RequestException as e:
+            print(f'Failed to retrieve {link}: {e}')
+
+if __name__ == '__main__':
+    url = 'https://www.bbc.com/news'
+    links = get_links_from_page(url)
+    if links:
+        crawl_links(links)
+    else:
+        print("No links found to crawl.")
